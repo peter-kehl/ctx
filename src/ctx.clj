@@ -16,6 +16,12 @@
 (def reader-++ (partial collect-symbol ++))
 (def reader--- (partial collect-symbol --))
 
+(def scope? map?)
+(defn export-scope [symbols captured]
+  {:pre [(seq? symbols) (every? symbol? symbols) (map? captured)]
+   :post [(scope? %)]}
+  "TODO")
+
 (def ^:private reader-bottom-token ::reader-bottom-token)
 (def ^:private reader-start-token ::reader-start-token)
 ; This will be run by the parser before macro expansion of its enclosing (scope ...).
@@ -33,31 +39,42 @@
   [reader-token]
   {:pre[(= reader-token reader-bottom-token)]}
   (let [symbols (if &env (keys &env) ())
-        scope-at-top-symbol (->> symbols (filter #(clojure.string/starts-with? (str %) "ctx-scope-at-top")) first)]
-      `(TODO)))
+        captured-at-top-symbol (->> symbols (filter #(clojure.string/starts-with? (str %) "ctx-captured-at-top")) first)]
+      `(export-scope ('~@symbols) ~captured-at-top-symbol)))
 
+; TODO Since Clojure processes all tagged reader elements in the whole file before any macros, here we pass *collected-symbols* to (scope...) and reset *collected-symbols*.
 (defn reader-start "Capture a scope start. Don't call directly. See scope()." [[action & params :as scope-call]]
   {:pre [(list? scope-call) (= action `scope)
     *collected-symbols*]}
   `(scope reader-start-token @~params))
-; TODO If CLJ runs all tagged reader calls in the file before any macros, then make reader-starter pass *collected-symbols* to (scope...) and reset *collected-symbols*.
+
+;TODO use:
+(defrecord CapturedAtTheTop [scope-name symbols collected-symbols])
+
+; TODO Representing the "entry" function in the scope. And/or: implement IFn.
+; #
+(def ^:private capture-modes #{:specified :all })
 
 ; TODO inherit & multiple inheritance. "Child" scopes contain all symbols from all their parents. Any later parent shadows the same symbols from earlier parents.
-(defmacro scope "Declare (an outer boundary of) a new scope. Prefix it with #ctx/start. Hence call it as: #ctx/start (ctx/scope ...). (ctx/scope...) on its own doesn't return the captured scope. Common practice is to have (let[...]) or (letfn[...]) inside (ctx/scope), and return value of #ctx/bottom (ctx/level). (Don't pass any token parameter, it gets added behind the scenes."
-[reader-token scope-name & form]
-  {:pre [;(tagged-scope-name? scope-name "Prefix the scope name with #ctx/scope.")
-         (= reader-token reader-start-token)
-         (symbol? scope-name) *collected-symbols*]}
+(defmacro scope "Declare (an outer boundary of) a new scope. Prefix it with #ctx/start. Hence call it as: #ctx/start (ctx/scope ...). (ctx/scope...) on its own doesn't return the captured scope. Common practice is to have (let[...]) or (letfn[...]) inside (ctx/scope), and return value of #ctx/bottom (ctx/level). Parameter `mode` is optional and it defaults to :specified. (Don't pass any token parameter, it gets added behind the scenes."
+([reader-token scope-name form] `(scope reader-token scope-name :specified form))
+([reader-token scope-name capture-mode form] `(scope reader-token scope-name () capture-mode form))
+([reader-token scope-name parents capture-mode form]
+  {:pre [(= reader-token reader-start-token)
+         (symbol? scope-name) *collected-symbols*
+         (seq? parents) (capture-modes capture-mode)]}
   (try
     (let [symbols (if &env (keys &env) ())]
-      `(let [ctx-scope-at-top# {
+      `(let [ctx-captured-at-top# {
         `scope-name scope-name
         `symbols ('~@symbols)
         `collected-symbols *collected-symbols*
         }]
        form))
-  (finally (set! *collected-symbols* false))))
+  (finally (set! *collected-symbols* false)))))
 
+;TODO following is ignored when loaded by load-file.
+;That's because *data-readers* has to be set before the file is loaded.
 (set! *data-readers* (assoc *data-readers*
       'ctx/bottom reader-bottom
       'ctx/start reader-start
