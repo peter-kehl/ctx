@@ -7,12 +7,6 @@
   ;TODO start new collector
   (cons name tagged-scope-stamp))
 
-; TODO can it be private, even though it's injected in the user's scope?
-(defmacro env "Local symbols, quoted, in a seq, if any. Otherwise an empty list." []
-  ;(println &env)
-  (let [syms (if &env (keys &env) ())]
-    `(list '~@syms)))
-
 (def ^:dynamic ^:private *collected-symbols* false) ;Map: user's symbol->`++ or `--. Assoc fails for false. Don't initialise to nil, because that proceeds silently, hiding an error.
 (def ^:private ++ `++) (def ^:private -- `--)
 (defn ^:private collect-symbol [action-sym user-sym]
