@@ -59,10 +59,10 @@
         captured-at-top-symbol (->> symbols (filter #(clojure.string/starts-with? (str %) "ctx-captured-at-top")) first)]
       `(export-scope ('~@symbols) ~captured-at-top-symbol)))
 
-(defn reader-tag-start "Capture a scope start. Don't call directly. See scope()." [[action & params :as scope-macro-call]]
+(defn reader-tag-start "Capture a scope start. Required with #ctx/strict #ctx/mode, otherwise optional. Don't call directly. See scope()." [[action & params :as scope-macro-call]]
   {:pre [(list? scope-macro-call) (= action `scope)
     (false? *collected-symbols*)]}
-  `(scope reader-tag-start-token @~params))
+  `(scope @~params reader-tag-start-token))
 
 ;TODO use:
 (defrecord CapturedAtTheTop [scope-name symbols collected-symbols])
@@ -72,22 +72,22 @@
 (def ^:private capture-modes #{:all :specified})
 
 ; TODO inherit & multiple inheritance. "Child" scopes contain all symbols from all their parents. Any later parent shadows the same symbols from earlier parents.
-(defmacro scope "Declare (an outer boundary of) a new scope. Prefix it with #ctx/start. Hence call it as: #ctx/start (ctx/scope ...). (ctx/scope...) on its own doesn't return the captured scope. Common practice is to have (let[...]) or (letfn[...]) inside (ctx/scope), and return value of #ctx/bottom (ctx/level). Parameter `mode` is optional and it defaults to :all. (Don't pass any token parameter, it gets added behind the scenes."
-([reader-tag-token scope-name #_TODO form] `(scope reader-tag-token scope-name :all [form]))
-([reader-tag-token scope-name capture-mode form] `(scope reader-tag-token scope-name () capture-mode [form]))
-([reader-tag-token scope-name parents capture-mode & forms]
-  {:pre [(= reader-tag-token reader-tag-start-token)
+(defmacro scope "Declare (an outer boundary of) a new scope. When in #ctx/strict #ctx/mode, prefix this macro call with #ctx/start and call it as: #ctx/start (ctx/scope ...). Beware that (ctx/scope...) needs well-suited code to return a captured scope. Common practice is to have (let[...]) or (letfn[...]) inside (ctx/scope), and return value of #ctx/bottom (ctx/level). Parameter `mode` is optional and it defaults to :all. Pass one or more forms. (Don't append any token parameter, it gets added behind the scenes.)"
+  ([scope-name form] `(scope ~scope-name :all ~form))
+  ([scope-name capture-mode form] `(scope ~scope-name () ~capture-mode ~form))
+  ([scope-name parents capture-mode & forms-and-reader-tag-token]
+  {:pre [;TODO together with collected tagged symbols: (= reader-tag-token reader-tag-start-token)
          (symbol? scope-name) *collected-symbols*
          (seq? parents) (capture-modes capture-mode)]}
-  (try
-    (let [symbols (if &env (keys &env) ())]
-      `(let [ctx-captured-at-top# {
-        `scope-name scope-name
-        `symbols ('~@symbols)
-        `collected-symbols *collected-symbols*
-        }]
-       ~@forms))
-  (finally (set! *collected-symbols* false)))))
+  (let [forms "TODO minus tag collect, if any"
+        symbols (if &env (keys &env) ())]
+    `(let [ctx-captured-at-top# {
+      `scope-name scope-name
+      `symbols ('~@symbols)
+      `collected-symbols *collected-symbols*
+      }]
+     ~@forms))))
+  ;TODO to tag reader: (finally (set! *collected-symbols* false))
 
 ;TODO We need to register tag readers *before* the file is loaded. Investigate data_readers.clj. See https://clojure.org/reference/reader#tagged_literals
 (set! *data-readers* (assoc *data-readers*
