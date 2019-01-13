@@ -19,6 +19,11 @@
    :post [(scope? %)]}
   "TODO")
 
+(def ^:dynamic ^:private ctx-strict-tags false)
+(alter-var-root  (var ctx-strict-tags) (fn [_] false))
+(defmacro non-existing-var []
+  '(ns-resolve *ns* non-existing-var))
+
 ;TODO instead of #ctx/bottom (ctx/level), allow: #ctx/bottom ctx/level
 ; where ctx/level is still a macro, but reader-bottom adds parens. That makes
 ; typing easier for the user. Don't (def bottom) as a variable, because then
@@ -68,9 +73,9 @@
 
 ; TODO inherit & multiple inheritance. "Child" scopes contain all symbols from all their parents. Any later parent shadows the same symbols from earlier parents.
 (defmacro scope "Declare (an outer boundary of) a new scope. Prefix it with #ctx/start. Hence call it as: #ctx/start (ctx/scope ...). (ctx/scope...) on its own doesn't return the captured scope. Common practice is to have (let[...]) or (letfn[...]) inside (ctx/scope), and return value of #ctx/bottom (ctx/level). Parameter `mode` is optional and it defaults to :all. (Don't pass any token parameter, it gets added behind the scenes."
-([reader-token scope-name form] `(scope reader-token scope-name :all form))
-([reader-token scope-name capture-mode form] `(scope reader-token scope-name () capture-mode form))
-([reader-token scope-name parents capture-mode form]
+([reader-token scope-name #_TODO form] `(scope reader-token scope-name :all [form]))
+([reader-token scope-name capture-mode form] `(scope reader-token scope-name () capture-mode [form]))
+([reader-token scope-name parents capture-mode & forms]
   {:pre [(= reader-token reader-start-token)
          (symbol? scope-name) *collected-symbols*
          (seq? parents) (capture-modes capture-mode)]}
@@ -81,7 +86,7 @@
         `symbols ('~@symbols)
         `collected-symbols *collected-symbols*
         }]
-       form))
+       ~@forms))
   (finally (set! *collected-symbols* false)))))
 
 ;TODO following is ignored when loaded by load-file.
