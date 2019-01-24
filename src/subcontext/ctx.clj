@@ -1,4 +1,4 @@
-(ns ctx
+(ns subcontext.ctx
   (:require [clojure.string]))
 
 ;CONVENTIONS
